@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getPublishedPosts, type BlogPost } from '../../utils/posts';
+import { withBase } from '../../utils/paths';
+
+const posts = await getPublishedPosts();
+const postsByYear = new Map<number, BlogPost[]>();
+
+for (const post of posts) {
+  const year = post.data.pubDate.getFullYear();
+  postsByYear.set(year, [...(postsByYear.get(year) ?? []), post]);
+}
+---
+
+<BaseLayout title="归档" description="按发布时间浏览博客文章。">
+  <div class="container">
+    <header class="page-intro">
+      <h1>归档</h1>
+      <p>时间会过去，写下的内容留在这里。</p>
+    </header>
+    <div class="archive-list">
+      {[...postsByYear.entries()].map(([year, yearPosts]) => (
+        <section class="archive-year" aria-labelledby={`year-${year}`}>
+          <h2 id={`year-${year}`}>{year}</h2>
+          <div class="archive-items">
+            {yearPosts.map((post) => (
+              <div class="archive-item">
+                <time datetime={post.data.pubDate.toISOString()}>
+                  {String(post.data.pubDate.getMonth() + 1).padStart(2, '0')}-
+                  {String(post.data.pubDate.getDate()).padStart(2, '0')}
+                </time>
+                <a href={withBase(`/posts/${post.id}/`)}>{post.data.title}</a>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

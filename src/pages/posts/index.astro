@@ -1,0 +1,23 @@
+---
+import PostCard from '../../components/PostCard.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getPublishedPosts } from '../../utils/posts';
+
+const posts = await getPublishedPosts();
+---
+
+<BaseLayout title="文章" description="技术实践、学习思考与生活记录。">
+  <div class="container">
+    <header class="page-intro">
+      <h1>
+        文章<span class="post-count">{posts.length} 篇</span>
+      </h1>
+      <p>把零散的经验写下来，让知识有迹可循。</p>
+    </header>
+    <div class="post-list content-section">
+      {posts.map((post) => (
+        <PostCard post={post} />
+      ))}
+    </div>
+  </div>
+</BaseLayout>

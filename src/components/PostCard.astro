@@ -1,0 +1,34 @@
+---
+import type { BlogPost } from '../utils/posts';
+import { formatDate } from '../utils/posts';
+import { withBase } from '../utils/paths';
+
+interface Props {
+  post: BlogPost;
+}
+
+const { post } = Astro.props;
+const postUrl = withBase(`/posts/${post.id}/`);
+---
+
+<article class="post-card">
+  <div class="post-meta">
+    <time datetime={post.data.pubDate.toISOString()}>
+      {formatDate(post.data.pubDate)}
+    </time>
+    {post.data.updatedDate && <span>已更新</span>}
+  </div>
+  <h2>
+    <a href={postUrl}>{post.data.title}</a>
+  </h2>
+  <p class="post-description">{post.data.description}</p>
+  {post.data.tags.length > 0 && (
+    <div class="tag-list" aria-label="文章标签">
+      {post.data.tags.map((tag) => (
+        <a class="tag" href={withBase(`/tags/${encodeURIComponent(tag)}/`)}>
+          #{tag}
+        </a>
+      ))}
+    </div>
+  )}
+</article>

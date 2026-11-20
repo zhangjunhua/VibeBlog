@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://zhangjunhua.github.io/VibeBlog/sitemap-index.xml
