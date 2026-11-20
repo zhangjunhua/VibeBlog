@@ -1,0 +1,188 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="搜索" description="搜索文章标题、标签、摘要和正文。">
+  <div class="container">
+    <header class="page-intro">
+      <h1>搜索</h1>
+      <p>从全部已发布文章中查找你感兴趣的内容。</p>
+    </header>
+
+    <div class="search-panel" role="search">
+      <input
+        id="search-input"
+        class="search-input"
+        type="search"
+        placeholder="输入关键词，例如：Astro、生活、内容集合"
+        aria-label="搜索文章"
+        aria-describedby="search-hint"
+        autocomplete="off"
+        autofocus
+      />
+      <p id="search-hint" class="search-hint">
+        支持标题、标签、摘要和正文；多个关键词可用空格分隔。
+      </p>
+    </div>
+
+    <p
+      id="search-status"
+      class="search-status"
+      role="status"
+      aria-live="polite"
+    ></p>
+    <div id="search-results" class="post-list search-results" hidden></div>
+  </div>
+</BaseLayout>
+
+<script>
+  interface SearchPost {
+    id: string;
+    title: string;
+    description: string;
+    pubDate: string;
+    tags: string[];
+    content: string;
+  }
+
+  const input = document.querySelector<HTMLInputElement>('#search-input')!;
+  const status =
+    document.querySelector<HTMLParagraphElement>('#search-status')!;
+  const results = document.querySelector<HTMLDivElement>('#search-results')!;
+  const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+  let indexPromise: Promise<SearchPost[]> | undefined;
+  let debounceTimer: ReturnType<typeof setTimeout>;
+  let searchRevision = 0;
+
+  function normalize(value: string): string {
+    return value.toLocaleLowerCase('zh-CN');
+  }
+
+  function loadIndex(): Promise<SearchPost[]> {
+    indexPromise ??= fetch(`${baseUrl}/search-index.json`)
+      .then((response) => {
+        if (!response.ok) throw new Error('搜索索引加载失败');
+        return response.json();
+      })
+      .catch((error) => {
+        indexPromise = undefined;
+        throw error;
+      });
+
+    return indexPromise;
+  }
+
+  function getScore(post: SearchPost, terms: string[]): number {
+    const title = normalize(post.title);
+    const tags = normalize(post.tags.join(' '));
+    const description = normalize(post.description);
+    const content = normalize(post.content);
+    let score = 0;
+
+    for (const term of terms) {
+      let termScore = 0;
+      if (title.includes(term)) termScore += 8;
+      if (tags.includes(term)) termScore += 5;
+      if (description.includes(term)) termScore += 3;
+      if (content.includes(term)) termScore += 1;
+      if (termScore === 0) return 0;
+      score += termScore;
+    }
+
+    return score;
+  }
+
+  function createElement<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className?: string,
+    text?: string,
+  ): HTMLElementTagNameMap[K] {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  }
+
+  function createResult(post: SearchPost): HTMLElement {
+    const card = createElement('article', 'post-card');
+    const main = createElement('div', 'post-card-main');
+    const meta = createElement('div', 'post-meta');
+    const time = createElement(
+      'time',
+      undefined,
+      new Date(post.pubDate).toLocaleDateString('zh-CN'),
+    );
+    time.dateTime = post.pubDate;
+
+    const heading = createElement('h2');
+    const link = createElement('a', undefined, post.title);
+    const postPath = post.id.split('/').map(encodeURIComponent).join('/');
+    link.href = `${baseUrl}/posts/${postPath}/`;
+    heading.append(link);
+
+    const description = createElement(
+      'p',
+      'post-description',
+      post.description,
+    );
+    meta.append(time);
+    main.append(meta, heading, description);
+    card.append(main);
+
+    if (post.tags.length > 0) {
+      const tagList = createElement('div', 'tag-list post-card-tags');
+      tagList.setAttribute('aria-label', '文章标签');
+      for (const tag of post.tags) {
+        const tagLink = createElement('a', 'tag', `#${tag}`);
+        tagLink.href = `${baseUrl}/tags/${encodeURIComponent(tag)}/`;
+        tagList.append(tagLink);
+      }
+      card.append(tagList);
+    }
+
+    return card;
+  }
+
+  async function performSearch() {
+    const revision = ++searchRevision;
+    const query = input.value.trim();
+
+    if (!query) {
+      status.textContent = '';
+      results.hidden = true;
+      results.replaceChildren();
+      return;
+    }
+
+    status.textContent = '正在搜索…';
+
+    try {
+      const posts = await loadIndex();
+      if (revision !== searchRevision) return;
+
+      const terms = normalize(query).split(/\s+/);
+      const matches = posts
+        .map((post) => ({ post, score: getScore(post, terms) }))
+        .filter(({ score }) => score > 0)
+        .sort(
+          (a, b) =>
+            b.score - a.score || b.post.pubDate.localeCompare(a.post.pubDate),
+        );
+
+      results.replaceChildren(...matches.map(({ post }) => createResult(post)));
+      results.hidden = matches.length === 0;
+      status.textContent = matches.length
+        ? `找到 ${matches.length} 篇文章`
+        : `没有找到与“${query}”相关的文章`;
+    } catch {
+      if (revision !== searchRevision) return;
+      results.hidden = true;
+      status.textContent = '搜索索引暂时无法加载，请稍后重试。';
+    }
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(performSearch, 150);
+  });
+</script>
